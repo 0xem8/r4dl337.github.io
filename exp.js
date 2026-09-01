@@ -105,18 +105,20 @@
 
   var pointerLinkId = requisite.pointerLinkId || '';
   var maskedFIO = displayField(requisite.displayFields, 'maskedFIO');
-  var workflowType = requisite.workflowType || '';
 
   // --- Step 3: Build payParameters (key order matching line 31446-31456) ---
 
+  // providerFields: built from provider's fields array via updateProviderField (tW, line 19594).
+  // - pointerType: option value for "Телефон" from provider.fields, hardcoded as "8276" (line 26499)
+  // - workflowType: explicitly undefined in tW (line 19607) — EXCLUDED from providerFields
+  // - other fields: looked up from store.to[fieldId]
   var payParameters = {
     providerFields: {
       pointer: phone,
-      pointerType: 'phone',
+      pointerType: '8276',
       bankMemberId: BANK_ID,
       maskedFIO: maskedFIO,
-      pointerLinkId: pointerLinkId,
-      workflowType: workflowType
+      pointerLinkId: pointerLinkId
     },
     userPaymentId: Date.now().toString(),
     delayAccepted: 'false',
