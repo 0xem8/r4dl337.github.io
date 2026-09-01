@@ -99,7 +99,7 @@
   var requisite = reqData.payload[0];
 
   function displayField(fields, name) {
-    var f = (fields || []).find(function(i) { return i.key === name; });
+    var f = (fields || []).find(function(i) { return i.name === name; });
     return f ? (f.value || '') : '';
   }
 
