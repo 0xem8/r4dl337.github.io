@@ -114,15 +114,15 @@
   // - other fields: looked up from store.to[fieldId]
   var payParameters = {
     providerFields: {
-      pointer: phone,
       pointerType: '8276',
-      bankMemberId: BANK_ID,
+      pointer: phone,
+      pointerLinkId: pointerLinkId,
       maskedFIO: maskedFIO,
-      pointerLinkId: pointerLinkId
+      bankMemberId: BANK_ID
     },
     userPaymentId: Date.now().toString(),
     delayAccepted: 'false',
-    currency: '643',
+    currency: 'RUB',
     account: String(acct.id),
     moneyAmount: AMOUNT,
     provider: 'p2p-anybank'
